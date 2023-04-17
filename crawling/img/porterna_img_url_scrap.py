@@ -1,3 +1,4 @@
+import logging
 import re
 import urllib.request
 from bs4 import BeautifulSoup
@@ -6,6 +7,8 @@ from common.ProductTypes import product_types
 import urllib3
 import ssl
 import hashlib
+import time
+import concurrent.futures
 
 urllib3.disable_warnings()
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -37,25 +40,42 @@ def find_last_page(target_url):
     return number
 
 
-def detail_url_scraper(target_url):
+def detail_url_scraper(target_url, page_num):
     href_list = []
-    for page_num in range(1, int(find_last_page(target_url)) + 1):
-        header = {
-            'Referrer': target_url + str(page_num),
-            'user-agent': user_agent
-        }
-        response = requests.get(target_url + str(page_num), headers=header)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        soup = soup.find_all('ul', {'class': 'thumbnail'})
-        href_set = set()
-        for ul_tag in soup:
-            a_tags = ul_tag.find_all('a')
-            for a_tag in a_tags:
-                href = a_tag.get('href')
-                if href is not None:
-                    href_set.add(href)
-        href_list += list(href_set)
+    header = {
+        'Referrer': target_url + str(page_num),
+        'user-agent': user_agent
+    }
+    response = requests.get(target_url + str(page_num), headers=header)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = soup.find_all('ul', {'class': 'thumbnail'})
+    href_set = set()
+    for ul_tag in soup:
+        a_tags = ul_tag.find_all('a')
+        for a_tag in a_tags:
+            href = a_tag.get('href')
+            if href is not None:
+                href_set.add(href)
+    href_list += list(href_set)
     return href_list
+
+
+if __name__ == "__main__":
+    start_time = time.time()
+    target_url = "https://porterna.com/product/list.html?cate_no=79&page="
+    last_page = int(find_last_page(target_url))
+    href_list = []
+    with concurrent.futures.ThreadPoolExecutor() as executor: # 쓰레드 풀 생성
+        future_to_url = {executor.submit(detail_url_scraper, target_url, page_num): page_num for page_num in range(1, last_page+1)}
+        for future in concurrent.futures.as_completed(future_to_url):
+            page_num = future_to_url[future]
+            try:
+                href_set = future.result()
+                href_list += list(href_set)
+            except Exception as e:
+                logging.exception(e)
+    print("상품 개수:",len(href_list))
+    print(f"{time.time() - start_time} sec")
 
 
 def porterna_img_downloader(target_url, item_type):
