@@ -9,12 +9,12 @@ import ssl
 import hashlib
 import time
 import concurrent.futures
-
+import ray
 
 urllib3.disable_warnings()
 ssl._create_default_https_context = ssl._create_unverified_context
 
-
+ray.init()
 main_url = "https://porterna.com"
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36"
 
@@ -35,7 +35,7 @@ def find_last_page(target_url):
     number = match.group(1)
     return number
 
-
+@ray.remote
 def detail_url_scraper(target_url, page_num, item_type):
     href_list = []
     header = {
@@ -55,28 +55,27 @@ def detail_url_scraper(target_url, page_num, item_type):
     href_list += list(href_set)
     return href_list
 
+urls = [
+    ("https://porterna.com/product/list.html?cate_no=541&page=", product_types.OUTWEAR.name),
+    ("https://porterna.com/product/list.html?cate_no=789&page=", product_types.TOP.name),
+    ("https://porterna.com/product/list.html?cate_no=28&page=", product_types.BOTTOM.name),
+    ("https://porterna.com/product/list.html?cate_no=44&page=", product_types.ACCESSORY.name),
+    ("https://porterna.com/product/list.html?cate_no=79&page=", product_types.SHOES.name),
+]
 
-if __name__ == "__main__":
-    urls = [
-        ("https://porterna.com/product/list.html?cate_no=541&page=", product_types.OUTWEAR.name),
-        ("https://porterna.com/product/list.html?cate_no=789&page=", product_types.TOP.name),
-        ("https://porterna.com/product/list.html?cate_no=28&page=", product_types.BOTTOM.name),
-        ("https://porterna.com/product/list.html?cate_no=44&page=", product_types.ACCESSORY.name),
-        ("https://porterna.com/product/list.html?cate_no=79&page=", product_types.SHOES.name),
-    ]
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        start_time = time.time()
-        futures = []
-        for url, item_type in urls:
-            last_page = int(find_last_page(url))
-            for page_num in range(1, last_page+1):
-                futures.append(executor.submit(detail_url_scraper, url, page_num, item_type))
-        href_list = []
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                href_set = future.result()
-                href_list += list(href_set)
-            except Exception as e:
-                logging.exception(e)
-    print("상품 개수:", len(href_list))
-    print(f"{time.time() - start_time} sec")
+result_ids = []
+for url in urls:
+    for page_num in range(1, 6):  # 1 ~ 5 페이지를 크롤링
+        result_ids.append(detail_url_scraper.remote(url[0], page_num, url[1]))
+start_time = time.time()
+results = ray.get(result_ids)
+end_time = time.time()
+
+elapsed_time = end_time - start_time
+print("Elapsed Time: ", elapsed_time, "seconds")
+
+total_href_list = []
+for href_list in results:
+    total_href_list += href_list
+
+print("상품개수: ", len(total_href_list))
