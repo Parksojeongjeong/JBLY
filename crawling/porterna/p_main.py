@@ -59,10 +59,7 @@ def get_href_list(target_url):
     print(len(href_list))
     return href_list
 
-
-if __name__ == '__main__':
-    ray.init()
-    pid = os.getgid()
+def get_all_href():
     urls = [
         ("https://porterna.com/product/list.html?cate_no=541&page=", product_types.OUTWEAR.name),
         ("https://porterna.com/product/list.html?cate_no=789&page=", product_types.TOP.name),
@@ -74,10 +71,13 @@ if __name__ == '__main__':
     href_lists = []
     for url in urls:
         each_url,item_type = url
-
         href_list_ref = get_href_list.remote(url) # 메시지
         href_lists.append(href_list_ref)# 리뫁, futurese담김. 결국 진짜 값은 없음.(약속된 객체들)
     href_lists = ray.get(href_lists) #메소드, 기다렷다가 받은 진짜 리스트들 담김 get(get은 퓨쳐에서 답 가져오는거임)
-    print("pid", pid)
-print(len(href_lists))
-ray.shutdown()
+    print(href_lists)
+    print(len(href_lists))
+
+    return [href, item_type]
+
+if __name__ == '__main__':
+    get_all_href()
