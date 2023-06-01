@@ -117,5 +117,4 @@ def porterna_img_downloader(target_url, item_type):
                         md5hash = md5hash + ".jpg"
                         with open(path_folder_shoes + md5hash, 'wb') as f:
                             f.write(data)
-
     return None
